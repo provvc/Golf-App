@@ -1,12 +1,9 @@
-import { View, Text, StyleSheet, Pressable, Button } from 'react-native';
+import { useEffect, useState } from 'react';
+import { View, Text, StyleSheet, Button, ActivityIndicator } from 'react-native';
 import type { StaticScreenProps } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { CoursesStackParamList } from '../App';
-import { useNavigation, useRoute } from '@react-navigation/native';
-import haversineDistance from '../lib/CalculateDistance';
-import fetchGolfHoles from '../lib/FetchGolfHoles'; // this may not be needed here due to the JSON file // ... which will be replaced by a database
-import coursesData from '../data/courses.json';
-
+import { useNavigation } from '@react-navigation/native';
 
 type Props = StaticScreenProps<{
   courseId: number;
@@ -15,47 +12,66 @@ type Props = StaticScreenProps<{
 
 type NavigationProp = NativeStackNavigationProp<CoursesStackParamList, 'CourseInfo'>;
 
-export default function CourseDetails({route}: Props) {
+type Course = {
+  courseId: number;
+  name: string;
+  address: string;
+  latitude: number;
+  longitude: number;
+  city: string;
+  state: string;
+  country: string;
+};
 
-    // const courses = coursesData.courses
-    const { courseId, courseName } = route.params;
+export default function CourseDetails({ route }: Props) {
 
-    const course = coursesData.courses.find((c) => c.id === courseId)
+  const { courseId, courseName } = route.params;
+  const navigation = useNavigation<NavigationProp>();
 
-    const whiteTeesInfo =  course?.tees.male.filter((tee) => tee.tee_name.toLowerCase() === "white");
+  const [course, setCourse] = useState<Course | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-    const navigation = useNavigation<NavigationProp>();
+  useEffect(() => {
+    const fetchCourse = async () => {
+      try {
+        const response = await fetch(`http://192.168.2.112:5239/api/Course/course/${courseId}`);
+        if (!response.ok) throw new Error('Failed to fetch course');
+        const data: Course = await response.json();
+        setCourse(data);
+      } catch (err) {
+        setError('Could not load course details.');
+      } finally {
+        setLoading(false);
+      }
+    };
 
-    return (
-        <View style={styles.container}>
-            <Text>{course?.club_name}</Text>
-            <Text>{course?.location.address}</Text>
-            <Text>Holes: {whiteTeesInfo?.map((tee) => {
-                return tee.number_of_holes
-            })}</Text>
-            <Text>Par Total: {whiteTeesInfo?.map((tee) => {
-                return tee.par_total
-            })}</Text>
-            <Text>Course Rating: {whiteTeesInfo?.map((tee) => {
-                return tee.course_rating
-            })}</Text>
+    fetchCourse();
+  }, [courseId]);
 
-            {course && (
-                <Button 
-                    title="Preview Course" 
-                    onPress={() => navigation.navigate('CoursePrev', {courseId: course.id, courseName: course.club_name})}
-                />
-            )}
-            
-        </View>
-    );
+  if (loading) return <ActivityIndicator />;
+  if (error) return <Text>{error}</Text>;
 
+  return (
+    <View style={styles.container}>
+      <Text>{course?.name}</Text>
+      <Text>{course?.address}</Text>
+      <Text>{course?.city}, {course?.state}, {course?.country}</Text>
+
+      {course && (
+        <Button
+          title="Preview Course"
+          onPress={() => navigation.navigate('CoursePrev', { courseId: course.courseId, courseName: course.name })}
+        />
+      )}
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        justifyContent: 'center',
-        alignItems: 'center',
-    }
+  container: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  }
 });

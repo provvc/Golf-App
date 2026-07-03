@@ -1,43 +1,82 @@
-import { ScrollView, Text, StyleSheet, View, Button } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { useState, useRef, useEffect } from 'react';
 import haversineDistance from '../lib/CalculateDistance';
-import fetchGolfHoles from '../lib/FetchGolfHoles'; // this may not be needed here due to the JSON file // ... which will be replaced by a database
-import course from '../data/kingsway.json';
-import MapView, { UrlTile, Marker, MapPressEvent, LatLng , Polyline} from 'react-native-maps';
+import MapView, { Marker, LatLng, Polyline } from 'react-native-maps';
+import HoleCarousel from './CoursePreviewHoleCarousel';
 
+type Coord = {
+    latitude: number;
+    longitude: number;
+};
 
-export default function CoursePreview() {
+type CourseHole = {
+    courseHoleId: number;
+    courseHoleNumber: number;
+    par: number;
+    tee: Coord;
+    green: Coord;
+    fullLine: Coord[];
+};
 
+type Props = {
+    route: {
+        params: {
+            courseId: number;
+            courseName: string;
+        };
+    };
+};
+
+export default function CoursePreview({ route }: Props) {
+
+    const { courseId } = route.params;
+
+    const [holes, setHoles] = useState<CourseHole[]>([]);
     const [currentHoleIndex, setCurrentHoleIndex] = useState(0);
     const mapRef = useRef<MapView>(null);
 
-    const holes = course.holes;
     const currentHole = holes[currentHoleIndex];
-    
+
+    useEffect(() => {
+        const fetchHoles = async () => {
+            try {
+                const response = await fetch(`http://192.168.2.112:5239/api/CourseHole/course/${courseId}`);
+                if (!response.ok) throw new Error('Failed to fetch holes');
+                const data: CourseHole[] = await response.json();
+                setHoles(data);
+            } catch (err) {
+                console.error('Could not load course holes:', err);
+            }
+        };
+
+        fetchHoles();
+    }, [courseId]);
 
     useEffect(() => {
         if (!currentHole) return;
 
-        const teeCoord = { latitude: currentHole.tee.lat, longitude: currentHole.tee.lon };
-        const greenCoord = { latitude: currentHole.green.lat, longitude: currentHole.green.lon };   
+        const teeCoord = { latitude: currentHole.tee.latitude, longitude: currentHole.tee.longitude };
+        const greenCoord = { latitude: currentHole.green.latitude, longitude: currentHole.green.longitude };
         const bearing = calculateBearing(teeCoord, greenCoord);
 
         const midpoint = {
-            latitude: (teeCoord.latitude + greenCoord.latitude) / 2,
-            longitude: (teeCoord.longitude + greenCoord.longitude) / 2,
-        }
+            latitude: (teeCoord.latitude * 0.35 + greenCoord.latitude * 0.65),
+            longitude: (teeCoord.longitude * 0.35 + greenCoord.longitude * 0.65),
+        };
 
         const distanceBetweenTeeGreen = haversineDistance(teeCoord, greenCoord) / 1.09361;
 
         mapRef.current?.animateCamera({
-                center: midpoint,
-                heading: bearing,
-                pitch: 0,
-                altitude: distanceBetweenTeeGreen * 2.5,
-            },
-            { duration: 500 }
-        );
-    }, [currentHoleIndex]);
+            center: midpoint,
+            heading: bearing,
+            pitch: 0,
+            altitude: distanceBetweenTeeGreen * 2.6,
+        }, { duration: 500 });
+    }, [currentHoleIndex, holes]);
+
+    const handleHoleSelect = (holeNumber: number) => {
+        setCurrentHoleIndex(holeNumber - 1);
+    };
 
     function calculateBearing(start: LatLng, end: LatLng): number {
         const toRad = (deg: number) => (deg * Math.PI) / 180;
@@ -52,50 +91,8 @@ export default function CoursePreview() {
             Math.cos(lat1) * Math.sin(lat2) -
             Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
 
-        const bearing = toDeg(Math.atan2(y, x));
-        return (bearing + 360) % 360; // normalize to 0–360
+        return ((toDeg(Math.atan2(y, x))) + 360) % 360;
     }
-
-    function drawHoleLine() {
-        
-        const holeLine = currentHole.fullLine.map((coord) => ({
-            latitude: coord.lat,
-            longitude: coord.lon,
-        }));
-
-        return (
-            <View>
-                <Polyline
-                    coordinates={holeLine}
-                    strokeColor='yellow'
-                    strokeWidth={3}
-                />
-                {holeLine.map((coord, index) => (
-                    <Marker
-                        key={index}
-                        coordinate={{ latitude: coord.latitude, longitude: coord.longitude }}
-                        anchor={{x: 0.5, y: 0.5}}
-                    >
-                        <View style={styles.dot}></View>
-                    </Marker>
-                    ))
-                }
-                
-                    
-            </View>
-        );
-
-    }
-
-    function nextHole() {
-        setCurrentHoleIndex((i) => Math.min(i + 1, holes.length - 1))
-    }
-
-    function previousHole() {
-        setCurrentHoleIndex((i) => Math.max(i - 1, 0));
-    }
-
-    drawHoleLine();
 
     return (
         <View style={styles.container}>
@@ -107,48 +104,70 @@ export default function CoursePreview() {
                 pitchEnabled={false}
                 zoomEnabled={false}
                 mapType="satellite"
-                
+                showsCompass={false}
             >
-                {drawHoleLine()}
-                <Button 
-                    title='Next Hole'
-                    onPress={nextHole}
-                />
-                <Button 
-                    title='Previous Hole'
-                    onPress={previousHole}
-                />
+                {currentHole && (
+                    <>
+                        <Polyline
+                            coordinates={currentHole.fullLine}
+                            strokeColor='yellow'
+                            strokeWidth={3}
+                        />
+                        {currentHole.fullLine.map((coord, index) => (
+                            <Marker
+                                key={index}
+                                coordinate={coord}
+                                anchor={{ x: 0.5, y: 0.5 }}
+                            >
+                                <View style={styles.dot} />
+                            </Marker>
+                        ))}
+                        {/* <Marker
+                            coordinate={currentHole.tee}
+                            anchor={{ x: 0.5, y: 0.5 }}
+                        >
+                            <View style={styles.teeDot} />
+                        </Marker>
+                        <Marker
+                            coordinate={currentHole.green}
+                            anchor={{ x: 0.5, y: 0.5 }}
+                        >
+                            <View style={styles.greenDot} />
+                        </Marker> */}
+                    </>
+                )}
             </MapView>
+
+            <HoleCarousel holes={holes} onHoleSelect={handleHoleSelect} />
         </View>
     );
-
 }
-
-
 
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-    },
-    holesContainer: {
-        flex: 1,
-        flexDirection: 'column',
-        justifyContent: 'center',
         alignItems: 'center',
-        gap: 1,
-        marginVertical: 10
-    },
-    content: {
-        padding: 16,
-        alignItems: 'center',
+        justifyContent: 'flex-start',
     },
     map: {
-        flex: 1
+        ...StyleSheet.absoluteFillObject,
     },
     dot: {
         width: 8,
         height: 8,
         borderRadius: 4,
         backgroundColor: '#ffffff',
-    }
+    },
+    teeDot: {
+        width: 10,
+        height: 10,
+        borderRadius: 5,
+        backgroundColor: '#ffffff',
+    },
+    greenDot: {
+        width: 10,
+        height: 10,
+        borderRadius: 5,
+        backgroundColor: '#00ff00',
+    },
 });
