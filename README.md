@@ -1,6 +1,6 @@
 # Golf App
 
-Golf App used to track and record yardage, strokes, and personal bests for any local golf course via an interactive map.
+Mobile golf application used to track and record yardage, strokes, and personal bests for any local golf course via an interactive map.
 
 ## Technologies
 
