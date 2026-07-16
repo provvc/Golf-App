@@ -4,11 +4,11 @@ Golf App used to track and record yardage, strokes, and personal bests for any l
 
 ## Technologies
 
-TypeScript
-ReactNative
-Expo
-C#
-Entity Framework Core
+TypeScript,
+ReactNative,
+Expo,
+C#,
+Entity Framework Core,
 ASP.NET Core Web API
 
 ## External Services
