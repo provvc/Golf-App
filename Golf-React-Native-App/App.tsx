@@ -5,6 +5,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import CoursesView from './components/CoursesView';
 import CourseDetails from './components/CourseDetailsView';
 import CoursePreview from './components/CoursePreviewView';
+import CourseRound from './components/CourseRoundView';
 
 import HoleLogView from './components/HoleLogView';
 
@@ -15,6 +16,7 @@ export type CoursesStackParamList = {
   CourseList: undefined;
   CourseInfo: { courseId: number; courseName: string };
   CoursePrev: { courseId: number; courseName: string };
+  PlayRound: { courseId: number; courseName: string };
 };
 
 export type HoleLogStackParamList = {
@@ -38,6 +40,7 @@ function CoursesStackScreen() {
         options={({ route }) => ({ title: `${route.params.courseName} Details` })}
       />
       <CourseStack.Screen name="CoursePrev" component={CoursePreview} options={({route}) => ({title: `${route.params.courseName}`})} />
+      <CourseStack.Screen name='PlayRound' component={CourseRound} options={({route}) => ({title: `${route.params.courseName}`})} />
     </CourseStack.Navigator>
   );
 }

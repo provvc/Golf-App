@@ -64,6 +64,12 @@ export default function CourseDetails({ route }: Props) {
           onPress={() => navigation.navigate('CoursePrev', { courseId: course.courseId, courseName: course.name })}
         />
       )}
+      {course && (
+        <Button
+          title="Play Round"
+          onPress={() => navigation.navigate('PlayRound', { courseId: course.courseId, courseName: course.name })}
+        />
+      )}
     </View>
   );
 }
