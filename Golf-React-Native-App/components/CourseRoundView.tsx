@@ -1,7 +1,7 @@
 import { StyleSheet, View, Text } from 'react-native';
 import { useState, useRef, useEffect } from 'react';
 import haversineDistance from '../lib/CalculateDistance';
-import MapView, { Marker, LatLng, Polyline } from 'react-native-maps';
+import MapView, { Marker, LatLng, Polyline, Region } from 'react-native-maps';
 import HoleCarousel from './CoursePreviewHoleCarousel';
 
 type Coord = {
@@ -34,14 +34,11 @@ export default function CourseRound({ route }: Props) {
     const [holes, setHoles] = useState<CourseHole[]>([]);
     const [currentHoleIndex, setCurrentHoleIndex] = useState(0);
     const [pinCoord, setPinCoord] = useState<Coord | null>(null);
-    const [teeToPinYds, setTeeToPinYds] = useState(0);
-    const [pinToGreenYds, setPinToGreenYds] = useState(0);
-    const [dashCount, setDashCount] = useState(0);
-
+    const [isDragging, setIsDragging] = useState(false);
+    const [dragResetKey, setDragResetKey] = useState(0);
     const mapRef = useRef<MapView>(null);
 
     const currentHole = holes[currentHoleIndex];
-
 
     useEffect(() => {
         const fetchHoles = async () => {
@@ -82,23 +79,6 @@ export default function CourseRound({ route }: Props) {
         }, { duration: 500 });
     }, [currentHoleIndex, holes]);
 
-    useEffect(() => {
-        if (!currentHole || !pinCoord) return;
-
-        const teeCoord = { latitude: currentHole.tee.latitude, longitude: currentHole.tee.longitude };
-        const greenCoord = { latitude: currentHole.green.latitude, longitude: currentHole.green.longitude };
-
-        setTeeToPinYds(haversineDistance(teeCoord, pinCoord) * 1.09361);
-        setPinToGreenYds(haversineDistance(pinCoord, greenCoord) * 1.09361);
-    }, [pinCoord, currentHole]);
-
-    useEffect(() => {
-        if (!currentHole || !pinCoord) return;
-
-        setDashCount(Math.ceil(pinToGreenYds / 20));
-
-    }, [pinCoord, pinToGreenYds]);
-
     const handleHoleSelect = (holeNumber: number) => {
         setCurrentHoleIndex(holeNumber - 1);
     };
@@ -126,28 +106,55 @@ export default function CourseRound({ route }: Props) {
         ? { latitude: currentHole.green.latitude, longitude: currentHole.green.longitude }
         : null;
 
+    const teeToPinYds = currentHole && pinCoord
+        ? haversineDistance(currentHole.tee, pinCoord) * 1.09361
+        : 0;
+    const pinToGreenYds = currentHole && pinCoord
+        ? haversineDistance(pinCoord, currentHole.green) * 1.09361
+        : 0;
+    const dashCount = Math.ceil(pinToGreenYds / 20);
+
     return (
         <View style={styles.container}>
             <MapView
                 style={styles.map}
                 ref={mapRef}
-                scrollEnabled={false}
+                scrollEnabled={true} 
                 rotateEnabled={false}
                 pitchEnabled={false}
-                zoomEnabled={false}
+                zoomEnabled={true}
                 mapType="satellite"
                 showsCompass={false}
+                cameraZoomRange={{
+                    minCenterCoordinateDistance: 50,
+                    maxCenterCoordinateDistance: 2000,
+                    animated: true
+                }}
+
             >
                 {currentHole && (
                     <>
-                        {teeCoord && pinCoord && (
+                        <Marker
+                            coordinate={currentHole.tee}
+                        >
+                            <View style={styles.dot}></View>
+                        </Marker>
+                        
+                        
+                        <Marker
+                            coordinate={currentHole.green}
+                        >
+                            <View style={styles.dot}></View>
+                        </Marker>
+
+                        {!isDragging && teeCoord && pinCoord && (
                             <Polyline
                                 coordinates={[teeCoord, pinCoord]}
                                 strokeColor="white"
                                 strokeWidth={2}
                             />
                         )}
-                        {pinCoord && greenCoord && (
+                        {!isDragging && pinCoord && greenCoord && (
                             <Polyline
                                 coordinates={[pinCoord, greenCoord]}
                                 strokeColor="white"
@@ -156,11 +163,16 @@ export default function CourseRound({ route }: Props) {
                         )}
                         { pinCoord && (
                             <Marker
+                                key={`pin-${dragResetKey}`}
                                 coordinate={pinCoord}
                                 draggable
+                                onDragStart={() => setIsDragging(true)}
                                 onDrag={(e) => setPinCoord(e.nativeEvent.coordinate)}
-                                onDragEnd={(e) => setPinCoord(e.nativeEvent.coordinate)}
-                                anchor={{x:0.5, y:0.5}}
+                                onDragEnd={(e) => {
+                                    setPinCoord(e.nativeEvent.coordinate);
+                                    setIsDragging(false);
+                                    setDragResetKey((k) => k + 1);
+                                }}
                             >
                                 <View style={styles.pinDot}>
                                     <View style={styles.pointDot}></View>
@@ -242,6 +254,9 @@ const styles = StyleSheet.create({
         color: '#ffffff',
         fontSize: 14,
         fontWeight: '600',
+        textShadowColor: 'rgba(0, 0, 0, 0.75)',
+        textShadowOffset: { width: 0, height: 1 },
+        textShadowRadius: 4,
     },
     dashText: {
         color: '#ffffff',
@@ -249,6 +264,8 @@ const styles = StyleSheet.create({
         paddingLeft: 5,
         fontSize: 8,
         fontWeight: '600',
-
+        textShadowColor: 'rgba(0, 0, 0, 0.75)',
+        textShadowOffset: { width: 0, height: 1 },
+        textShadowRadius: 4,
     }
 });
